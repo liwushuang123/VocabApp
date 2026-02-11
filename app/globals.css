@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #3b82f6;
+  --color-primary-dark: #2563eb;
+  --bottom-nav-height: 4rem;
+  --reading-bg: #f5f0e8;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  padding-bottom: var(--bottom-nav-height);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Safe area support for notched phones */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  :root {
+    --bottom-nav-height: calc(4rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Reading mode — full screen, no bottom padding */
+body:has(.reading-mode) {
+  padding-bottom: 0;
+}
+
+/* Prevent text selection on page flip zones */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* PDF text layer — suppress iOS native selection on touch devices only */
+@media (pointer: coarse) {
+  .reading-mode .react-pdf__Page__textContent {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+.react-pdf__Page__textContent span {
+  cursor: pointer;
+  -webkit-touch-callout: none;
+}
+
+/* Page flip arrow flash */
+@keyframes flash-arrow {
+  0% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+.flash-arrow {
+  animation: flash-arrow 0.3s ease-out forwards;
+}
+
+/* Hide native selection highlight on PDF text layer spans (they cover large areas) */
+.reading-mode .react-pdf__Page__textContent ::selection {
+  background: transparent;
+}

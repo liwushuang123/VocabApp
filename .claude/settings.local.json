@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(curl:*)",
+      "Bash(gunzip:*)",
+      "Bash(lsof:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)"
+    ]
+  }
+}
