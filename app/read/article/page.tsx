@@ -45,7 +45,7 @@ export default function ArticleReaderPage() {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="text-blue-600 text-sm">
+          <button onClick={() => router.back()} className="text-green-600 text-sm">
             ← Back
           </button>
           <h1 className="text-xl font-bold">Paste Article</h1>
@@ -56,7 +56,7 @@ export default function ArticleReaderPage() {
           placeholder="Article title (optional)"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
         />
 
         <textarea
@@ -64,13 +64,13 @@ export default function ArticleReaderPage() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={12}
-          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-500"
         />
 
         <button
           onClick={startReading}
           disabled={!text.trim()}
-          className="w-full py-3 bg-blue-600 text-white rounded-xl font-medium text-sm hover:bg-blue-700 disabled:opacity-30 transition-colors"
+          className="w-full py-3 bg-green-600 text-white rounded-xl font-medium text-sm hover:bg-green-700 disabled:opacity-30 transition-colors"
         >
           Start Reading
         </button>
@@ -81,7 +81,7 @@ export default function ArticleReaderPage() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-4">
-        <button onClick={() => setIsReading(false)} className="text-blue-600 text-sm">
+        <button onClick={() => setIsReading(false)} className="text-green-600 text-sm">
           ← Back
         </button>
         <h1 className="text-lg font-semibold truncate flex-1">

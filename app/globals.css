@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --color-primary: #3b82f6;
-  --color-primary-dark: #2563eb;
+  --color-primary: #16a34a;
+  --color-primary-dark: #15803d;
   --bottom-nav-height: 4rem;
   --reading-bg: #f5f0e8;
 }
@@ -34,17 +34,12 @@ body:has(.reading-mode) {
   user-select: none;
 }
 
-/* PDF text layer — suppress iOS native selection on touch devices only */
-@media (pointer: coarse) {
-  .reading-mode .react-pdf__Page__textContent {
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
-  }
+/* PDF text layer — allow selection for adjustable handles, but suppress callout */
+.react-pdf__Page__textContent {
+  -webkit-touch-callout: none;
 }
 .react-pdf__Page__textContent span {
   cursor: pointer;
-  -webkit-touch-callout: none;
 }
 
 /* Page flip arrow flash */

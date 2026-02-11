@@ -8,7 +8,8 @@
       "Bash(gunzip:*)",
       "Bash(lsof:*)",
       "Bash(find:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(ls:*)"
     ]
   }
 }

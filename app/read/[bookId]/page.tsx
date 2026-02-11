@@ -13,7 +13,7 @@ const PdfViewer = dynamic(() => import("@/components/pdf/PdfViewer"), {
       className="flex items-center justify-center h-screen"
       style={{ backgroundColor: "var(--reading-bg)" }}
     >
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
     </div>
   ),
 });
@@ -54,7 +54,7 @@ export default function ReadBookPage() {
         className="flex items-center justify-center h-screen"
         style={{ backgroundColor: "var(--reading-bg)" }}
       >
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
       </div>
     );
   }

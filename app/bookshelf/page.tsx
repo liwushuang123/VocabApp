@@ -74,7 +74,7 @@ export default function BookshelfPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
       </div>
     );
   }
@@ -86,7 +86,7 @@ export default function BookshelfPage() {
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
         >
           {uploading ? "Uploading..." : "+ Add PDF"}
         </button>

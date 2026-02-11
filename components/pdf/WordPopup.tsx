@@ -115,7 +115,7 @@ export default function WordPopup({ word, onClose }: WordPopupProps) {
         style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }}>
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600" />
           </div>
         ) : data ? (
           <div className="space-y-3">
@@ -124,7 +124,7 @@ export default function WordPopup({ word, onClose }: WordPopupProps) {
               <h2 className="text-xl font-bold">{data.word}</h2>
               <button
                 onClick={playAudio}
-                className="p-2 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100"
+                className="p-2 rounded-full bg-green-50 text-green-600 hover:bg-green-100"
                 aria-label="Play pronunciation"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
@@ -160,7 +160,7 @@ export default function WordPopup({ word, onClose }: WordPopupProps) {
               className={`w-full py-3 rounded-xl font-medium text-sm transition-colors ${
                 saved
                   ? "bg-green-50 text-green-600 border border-green-200"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-green-600 text-white hover:bg-green-700"
               }`}
             >
               {saved ? "Saved!" : saving ? "Saving..." : "Save to Vocabulary"}

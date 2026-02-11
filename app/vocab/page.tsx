@@ -68,7 +68,7 @@ export default function VocabPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
       </div>
     );
   }
@@ -83,7 +83,7 @@ export default function VocabPage() {
         placeholder="Search words..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
       />
 
       {/* Category filter */}
@@ -94,7 +94,7 @@ export default function VocabPage() {
             onClick={() => setFilter(cat)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               filter === cat
-                ? "bg-blue-600 text-white"
+                ? "bg-green-600 text-white"
                 : "bg-white text-gray-600 border border-gray-200"
             }`}
           >
@@ -127,7 +127,7 @@ export default function VocabPage() {
                   <span className="font-semibold text-lg">{word.word}</span>
                   <button
                     onClick={() => playAudio(word)}
-                    className="p-1 rounded-full text-blue-500 hover:bg-blue-50"
+                    className="p-1 rounded-full text-green-500 hover:bg-green-50"
                     aria-label="Play pronunciation"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -165,7 +165,7 @@ export default function VocabPage() {
                           ? "bg-green-100 text-green-700"
                           : cat === "difficult"
                           ? "bg-red-100 text-red-700"
-                          : "bg-blue-100 text-blue-700"
+                          : "bg-green-100 text-green-700"
                         : "bg-gray-50 text-gray-400"
                     }`}
                   >

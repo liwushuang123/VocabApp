@@ -17,32 +17,72 @@ interface PdfViewerProps {
   onClose: () => void;
 }
 
-const EDGE_ZONE = 0.2; // 20% on each side
+const EDGE_ZONE = 0.2;
 const TAP_THRESHOLD_MS = 300;
-const LONG_PRESS_MS = 300;
+const LONG_PRESS_MS = 400;
 
-// ─── Utility: get the word at a touch/click point ────────────
-function getWordAtPoint(x: number, y: number): string | null {
-  const range = document.caretRangeFromPoint(x, y);
-  if (!range) return null;
+// ─── Utility: get word + Range at a point ─────────────────
+function getWordRangeAtPoint(
+  x: number,
+  y: number
+): { word: string; range: Range } | null {
+  // Try standard API first, then fallback for broader device support
+  let caretRange: Range | null = null;
 
-  const node = range.startContainer;
+  if (document.caretRangeFromPoint) {
+    caretRange = document.caretRangeFromPoint(x, y);
+  } else if ((document as unknown as { caretPositionFromPoint: (x: number, y: number) => { offsetNode: Node; offset: number } | null }).caretPositionFromPoint) {
+    const pos = (document as unknown as { caretPositionFromPoint: (x: number, y: number) => { offsetNode: Node; offset: number } | null }).caretPositionFromPoint(x, y);
+    if (pos) {
+      caretRange = document.createRange();
+      caretRange.setStart(pos.offsetNode, pos.offset);
+      caretRange.collapse(true);
+    }
+  }
+
+  if (!caretRange) return null;
+
+  const node = caretRange.startContainer;
   if (node.nodeType !== Node.TEXT_NODE) return null;
 
   const text = node.textContent || "";
-  let start = range.startOffset;
-  let end = range.startOffset;
+  let start = caretRange.startOffset;
+  let end = caretRange.startOffset;
 
-  // Expand backward to word start
   while (start > 0 && /[\w'-]/.test(text[start - 1])) start--;
-  // Expand forward to word end
   while (end < text.length && /[\w'-]/.test(text[end])) end++;
 
-  // Nothing found
   if (start === end) return null;
 
-  const word = text.slice(start, end).replace(/[^a-zA-Z'-]/g, "").toLowerCase();
-  return word.length > 1 ? word : null;
+  const word = text
+    .slice(start, end)
+    .replace(/[^a-zA-Z'-]/g, "")
+    .toLowerCase();
+  if (word.length <= 1) return null;
+
+  const range = document.createRange();
+  range.setStart(node, start);
+  range.setEnd(node, end);
+  return { word, range };
+}
+
+// ─── Helper: compute highlight rects from a range (handles multi-line) ──
+function getHighlightRects(range: Range): DOMRect[] {
+  const rects = Array.from(range.getClientRects());
+  if (rects.length === 0) {
+    const bounding = range.getBoundingClientRect();
+    if (bounding.width > 0 && bounding.height > 0) return [bounding];
+    return [];
+  }
+  return rects;
+}
+
+function getLookupPosFromRange(range: Range) {
+  const rect = range.getBoundingClientRect();
+  return {
+    x: Math.min(Math.max(rect.left + rect.width / 2, 50), window.innerWidth - 50),
+    y: rect.top - 8,
+  };
 }
 
 export default function PdfViewer({
@@ -60,35 +100,32 @@ export default function PdfViewer({
   const [showPageJump, setShowPageJump] = useState(false);
   const [jumpInput, setJumpInput] = useState("");
   const [flashSide, setFlashSide] = useState<"left" | "right" | null>(null);
+
+  // Selection UI state — multiple rects for multi-line selections
+  const [highlightRects, setHighlightRects] = useState<DOMRect[]>([]);
   const [lookupPosition, setLookupPosition] = useState<{
     x: number;
     y: number;
   } | null>(null);
 
-  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(
-    null
-  );
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressPosRef = useRef<{ x: number; y: number } | null>(null);
   const isLongPressRef = useRef(false);
-  // Store PDF original dimensions for resize recalculation
   const pdfDimsRef = useRef<{ w: number; h: number } | null>(null);
 
   // ─── Calculate optimal page width (fit-to-viewport) ──────
   const calcOptimalWidth = useCallback(() => {
     const dims = pdfDimsRef.current;
     if (!dims) return window.innerWidth;
-
     const ratio = dims.w / dims.h;
     const topBar = 56;
     const bottomBar = 48;
-    // Use CSS env for safe area if available, fallback to 44px
     const safeTop = 44;
     const availH = window.innerHeight - topBar - bottomBar - safeTop;
     const availW = window.innerWidth;
-    const widthFromH = availH * ratio;
-    return Math.min(availW, widthFromH);
+    return Math.min(availW, availH * ratio);
   }, []);
 
   useEffect(() => {
@@ -105,64 +142,75 @@ export default function PdfViewer({
     }
   }, [showControls]);
 
-  // ─── Listen for native text selection ─────────────────────
+  // ─── Shared: apply word selection + show highlight ────────
+  const selectWordFromRange = useCallback(
+    (result: { word: string; range: Range }) => {
+      const { range } = result;
+
+      // Apply range to native selection (enables adjustable handles on touch)
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+
+      // Show custom highlight overlay + "Look up" button
+      setHighlightRects(getHighlightRects(range));
+      setLookupPosition(getLookupPosFromRange(range));
+    },
+    []
+  );
+
+  // ─── Listen for selection changes (adjustable selection) ──
   useEffect(() => {
     const handleSelectionChange = () => {
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed || !selection.toString().trim()) {
-        setLookupPosition(null);
+        // Only clear if we're not showing the popup
+        if (!selectedWord) {
+          setHighlightRects([]);
+          setLookupPosition(null);
+        }
         return;
       }
 
-      // Only show "Look up" if selection is inside our reader
+      // Only update if selection is inside our reader
       const range = selection.getRangeAt(0);
       const container = containerRef.current;
       if (!container || !container.contains(range.commonAncestorContainer)) {
+        setHighlightRects([]);
         setLookupPosition(null);
         return;
       }
 
-      // Position the button above the selection
-      const rect = range.getBoundingClientRect();
-      setLookupPosition({
-        x: Math.min(
-          Math.max(rect.left + rect.width / 2, 50),
-          window.innerWidth - 50
-        ),
-        y: rect.top - 8,
-      });
+      // Update highlight + button position as user adjusts handles
+      setHighlightRects(getHighlightRects(range));
+      setLookupPosition(getLookupPosFromRange(range));
     };
 
     document.addEventListener("selectionchange", handleSelectionChange);
     return () =>
       document.removeEventListener("selectionchange", handleSelectionChange);
-  }, []);
+  }, [selectedWord]);
 
   // ─── Prevent native iOS context menu on text layer ────────
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-
     const handleContextMenu = (e: Event) => {
       const target = e.target as HTMLElement;
       if (target.closest(".react-pdf__Page__textContent")) {
         e.preventDefault();
       }
     };
-
     container.addEventListener("contextmenu", handleContextMenu);
     return () =>
       container.removeEventListener("contextmenu", handleContextMenu);
   }, []);
 
   const onDocumentLoadSuccess = useCallback(
-    ({ numPages }: { numPages: number }) => {
-      setNumPages(numPages);
-    },
+    ({ numPages }: { numPages: number }) => setNumPages(numPages),
     []
   );
 
-  // ─── Page load: get dimensions for fit-to-viewport ────────
   const onPageLoadSuccess = useCallback(
     (page: { originalWidth: number; originalHeight: number }) => {
       pdfDimsRef.current = { w: page.originalWidth, h: page.originalHeight };
@@ -176,6 +224,9 @@ export default function PdfViewer({
     (newPage: number) => {
       const clamped = Math.max(1, Math.min(numPages, newPage));
       setPageNumber(clamped);
+      setHighlightRects([]);
+      setLookupPosition(null);
+      window.getSelection()?.removeAllRanges();
       updateReadingProgress(bookId, clamped).catch((err) =>
         console.error("Failed to save progress:", err)
       );
@@ -192,25 +243,30 @@ export default function PdfViewer({
     [changePage, pageNumber]
   );
 
-  // ─── Handle "Look up" button click ──────────────────────
+  // ─── Handle "Look up" button ─────────────────────────────
   const handleLookup = useCallback(() => {
     const selection = window.getSelection();
     const text = selection?.toString().trim();
     if (text) {
-      // Take the first word if multiple words selected
       const firstWord = text.split(/\s+/)[0];
       const cleaned = firstWord.replace(/[^a-zA-Z'-]/g, "").toLowerCase();
       if (cleaned.length > 1) {
-        setSelectedWord(cleaned);
+        setHighlightRects([]);
         setLookupPosition(null);
+        setSelectedWord(cleaned);
         selection?.removeAllRanges();
       }
     }
   }, []);
 
-  // ─── Touch handling (mobile) ────────────────────────────
-  // Custom long-press: selects single word at touch point.
-  // Short taps on edges flip pages.
+  // ─── Clear selection on tap outside ───────────────────────
+  const clearSelection = useCallback(() => {
+    setHighlightRects([]);
+    setLookupPosition(null);
+    window.getSelection()?.removeAllRanges();
+  }, []);
+
+  // ─── MOBILE/TABLET: Touch handlers (long-press) ──────────
   const handleTouchStart = useCallback(
     (e: React.TouchEvent) => {
       if (selectedWord) return;
@@ -223,35 +279,37 @@ export default function PdfViewer({
       longPressPosRef.current = { x, y };
       isLongPressRef.current = false;
 
-      // Clear any existing timer
+      // Prevent native iOS/iPadOS selection on text layer — we handle it ourselves
+      const target = e.target as HTMLElement;
+      if (target.closest(".react-pdf__Page__textContent")) {
+        e.preventDefault();
+      }
+
       if (longPressTimerRef.current) {
         clearTimeout(longPressTimerRef.current);
       }
 
-      // Start long-press timer — opens popup directly on word detection
+      // Long-press timer: select word + show highlight + "Look up" button
       longPressTimerRef.current = setTimeout(() => {
         const pos = longPressPosRef.current;
         if (pos) {
           isLongPressRef.current = true;
-          const word = getWordAtPoint(pos.x, pos.y);
-          if (word) {
-            setSelectedWord(word); // Open popup directly — no intermediate "Look up" step
+          const result = getWordRangeAtPoint(pos.x, pos.y);
+          if (result) {
+            selectWordFromRange(result);
           }
         }
       }, LONG_PRESS_MS);
     },
-    [selectedWord]
+    [selectedWord, selectWordFromRange]
   );
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     const pos = longPressPosRef.current;
     if (!pos) return;
-
     const touch = e.touches[0];
     const dx = touch.clientX - pos.x;
     const dy = touch.clientY - pos.y;
-
-    // If finger moved > 10px, cancel long-press
     if (Math.sqrt(dx * dx + dy * dy) > 10) {
       if (longPressTimerRef.current) {
         clearTimeout(longPressTimerRef.current);
@@ -264,7 +322,6 @@ export default function PdfViewer({
 
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
-      // Clear long-press timer
       if (longPressTimerRef.current) {
         clearTimeout(longPressTimerRef.current);
         longPressTimerRef.current = null;
@@ -272,13 +329,28 @@ export default function PdfViewer({
 
       if (selectedWord) return;
 
-      // If long-press fired, don't do page navigation
+      // If long-press fired, don't navigate
       if (isLongPressRef.current) {
         isLongPressRef.current = false;
         return;
       }
 
-      // If there's an active text selection, don't flip page
+      // If there's a selection with highlight showing, tap clears it
+      if (highlightRects.length > 0) {
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed) {
+          // Check if user tapped outside the selection — clear it
+          const touch = e.changedTouches[0];
+          const result = getWordRangeAtPoint(touch.clientX, touch.clientY);
+          const selectedText = selection.toString().trim();
+          if (!result || result.word !== selectedText.split(/\s+/)[0]?.replace(/[^a-zA-Z'-]/g, "").toLowerCase()) {
+            clearSelection();
+            return;
+          }
+        }
+        return;
+      }
+
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed) return;
 
@@ -287,10 +359,9 @@ export default function PdfViewer({
       if (!start) return;
 
       const elapsed = Date.now() - start.time;
-      if (elapsed > TAP_THRESHOLD_MS) return; // Not a quick tap
+      if (elapsed > TAP_THRESHOLD_MS) return;
 
       const relX = touch.clientX / window.innerWidth;
-
       if (relX < EDGE_ZONE) {
         flashAndFlip("left");
       } else if (relX > 1 - EDGE_ZONE) {
@@ -299,20 +370,24 @@ export default function PdfViewer({
         setShowControls((s) => !s);
       }
     },
-    [flashAndFlip, selectedWord]
+    [flashAndFlip, selectedWord, highlightRects, clearSelection]
   );
 
-  // ─── Mouse handling (desktop) ───────────────────────────
+  // ─── DESKTOP: Mouse handlers (double-click) ──────────────
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       if (selectedWord) return;
 
-      // If there's a text selection, don't handle as page flip
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed) return;
 
-      const relX = e.clientX / window.innerWidth;
+      // Clear any existing highlight on click
+      if (highlightRects.length > 0) {
+        clearSelection();
+        return;
+      }
 
+      const relX = e.clientX / window.innerWidth;
       if (relX < EDGE_ZONE) {
         flashAndFlip("left");
       } else if (relX > 1 - EDGE_ZONE) {
@@ -321,13 +396,19 @@ export default function PdfViewer({
         setShowControls((s) => !s);
       }
     },
-    [flashAndFlip, selectedWord]
+    [flashAndFlip, selectedWord, highlightRects, clearSelection]
   );
 
-  // Let browser handle double-click selection natively; just prevent page flip
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-  }, []);
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const result = getWordRangeAtPoint(e.clientX, e.clientY);
+      if (result) {
+        selectWordFromRange(result);
+      }
+    },
+    [selectWordFromRange]
+  );
 
   // ─── Page jump ──────────────────────────────────────────
   const handlePageJump = () => {
@@ -342,9 +423,7 @@ export default function PdfViewer({
   // Clean up timer on unmount
   useEffect(() => {
     return () => {
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-      }
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     };
   }, []);
 
@@ -396,7 +475,7 @@ export default function PdfViewer({
           onLoadSuccess={onDocumentLoadSuccess}
           loading={
             <div className="flex items-center justify-center h-screen">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
             </div>
           }
         >
@@ -470,12 +549,12 @@ export default function PdfViewer({
                 onChange={(e) => setJumpInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handlePageJump()}
                 placeholder={`1 – ${numPages}`}
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                 autoFocus
               />
               <button
                 onClick={handlePageJump}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
               >
                 Go
               </button>
@@ -484,10 +563,33 @@ export default function PdfViewer({
         </>
       )}
 
+      {/* ─── Custom word highlight overlay (multi-rect for multi-line) ─── */}
+      {highlightRects.length > 0 && !selectedWord && (
+        <>
+          {highlightRects.map((rect, i) => (
+            <div
+              key={i}
+              style={{
+                position: "fixed",
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                height: rect.height,
+                background: "rgba(187, 247, 208, 0.6)",
+                borderBottom: "2px solid rgba(34, 197, 94, 0.7)",
+                borderRadius: 2,
+                pointerEvents: "none",
+                zIndex: 10,
+              }}
+            />
+          ))}
+        </>
+      )}
+
       {/* ─── Floating "Look up" button ─── */}
       {lookupPosition && !selectedWord && (
         <button
-          className="fixed z-50 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-full shadow-lg"
+          className="fixed z-50 px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-full shadow-lg active:bg-green-700"
           style={{
             left: lookupPosition.x,
             top: lookupPosition.y,
@@ -509,6 +611,8 @@ export default function PdfViewer({
           word={selectedWord}
           onClose={() => {
             setSelectedWord(null);
+            setHighlightRects([]);
+            setLookupPosition(null);
             window.getSelection()?.removeAllRanges();
           }}
         />
