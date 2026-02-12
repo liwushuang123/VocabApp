@@ -11,6 +11,7 @@ interface WordPopupProps {
 interface WordData {
   word: string;
   translation: string;
+  pinyin: string | null;
   definition: string;
   example: string;
   audioUrl: string | null;
@@ -56,6 +57,7 @@ export default function WordPopup({ word, onClose }: WordPopupProps) {
       setData({
         word: enData.word,
         translation: zhData.translation || "",
+        pinyin: zhData.pinyin || null,
         definition: enData.definition,
         example: enData.example,
         audioUrl: enData.audioUrl,
@@ -134,9 +136,14 @@ export default function WordPopup({ word, onClose }: WordPopupProps) {
               </button>
             </div>
 
-            {/* Chinese translation */}
+            {/* Chinese translation + pinyin */}
             {data.translation && (
-              <div className="text-2xl text-gray-800 font-medium">{data.translation}</div>
+              <div>
+                <div className="text-2xl text-gray-800 font-medium">{data.translation}</div>
+                {data.pinyin && (
+                  <div className="text-sm text-gray-500 mt-0.5">{data.pinyin}</div>
+                )}
+              </div>
             )}
 
             {/* Definition */}

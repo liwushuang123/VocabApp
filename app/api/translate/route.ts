@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-let enZhDict: Record<string, { zh: string; def: string }> | null = null;
+let enZhDict: Record<string, { zh: string; def: string; pinyin?: string }> | null = null;
 
 function getDict() {
   if (!enZhDict) {
@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       word,
       translation: cedictEntry.zh,
+      pinyin: cedictEntry.pinyin || null,
       source: "cedict",
     });
   }

@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "build-dict": "curl -sL 'https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz' -o /tmp/cedict.gz && gunzip -f /tmp/cedict.gz && mv /tmp/cedict /tmp/cedict_ts.u8 && node scripts/build-dict.js"
   },
   "keywords": [],
   "author": "",
