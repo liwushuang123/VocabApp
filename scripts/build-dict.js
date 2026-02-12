@@ -85,6 +85,29 @@ const skipPatterns = [
   /\bdialect\b/i,
   /\bliterary\b/i,
   /\bclassical\b/i,
+  /\bBuddhism\b/i,
+  /\bBuddhist\b/i,
+  /\bSanskrit\b/i,
+  /\bTaoism\b/i,
+  /\bTaoist\b/i,
+  /\bConfuci/i,
+  /\bslang\b/i,
+  /\bInternet slang\b/i,
+  /\bcolloquial\b/i,
+  /\bvulgar\b/i,
+  /\bderogatory\b/i,
+  /\boffensive\b/i,
+  /\btaboo\b/i,
+  /\berhua variant\b/i,
+  /\bTw\b/,           // Taiwan-specific variant marker
+  /\bJapanese\b/i,
+  /\bKorean\b/i,
+  /\bVietnamese\b/i,
+  /\bCantonese\b/i,
+  /\bMinnan\b/i,
+  /\bHokkien\b/i,
+  /\bname of\b/i,     // "name of a place/person"
+  /\bsame as\b/i,
 ];
 
 /**
@@ -209,6 +232,18 @@ for (const key of Object.keys(dict)) {
 }
 
 console.log(`Built reverse dictionary with ${Object.keys(dict).length} English entries`);
+
+// Apply curated overrides — these always win over auto-generated entries
+const overridesFile = path.join(__dirname, '..', 'public', 'dict', 'overrides.json');
+if (fs.existsSync(overridesFile)) {
+  const overrides = JSON.parse(fs.readFileSync(overridesFile, 'utf-8'));
+  let overrideCount = 0;
+  for (const [word, entry] of Object.entries(overrides)) {
+    dict[word] = entry;
+    overrideCount++;
+  }
+  console.log(`Applied ${overrideCount} curated overrides`);
+}
 
 // Write output
 fs.mkdirSync(path.dirname(outputFile), { recursive: true });

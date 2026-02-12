@@ -19,18 +19,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing word parameter" }, { status: 400 });
   }
 
-  // Step 1: Look up in CC-CEDICT reverse dictionary
-  const cedictEntry = getDict()[word];
-  if (cedictEntry) {
-    return NextResponse.json({
-      word,
-      translation: cedictEntry.zh,
-      pinyin: cedictEntry.pinyin || null,
-      source: "cedict",
-    });
-  }
-
-  // Step 2: Fallback to MyMemory API for words not in CEDICT
+  // Step 1: Try MyMemory API first (purpose-built English→Chinese translation)
   try {
     const res = await fetch(
       `https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|zh-CN`,
@@ -40,7 +29,7 @@ export async function GET(request: NextRequest) {
     if (res.ok) {
       const data = await res.json();
       const translated = data?.responseData?.translatedText;
-      if (translated && translated !== word) {
+      if (translated && translated !== word && !/^[a-zA-Z\s]+$/.test(translated)) {
         return NextResponse.json({
           word,
           translation: translated,
@@ -49,7 +38,18 @@ export async function GET(request: NextRequest) {
       }
     }
   } catch {
-    // MyMemory failed, return without translation
+    // MyMemory failed, fall through to CEDICT
+  }
+
+  // Step 2: Fallback to CC-CEDICT reverse dictionary (offline, fast)
+  const cedictEntry = getDict()[word];
+  if (cedictEntry) {
+    return NextResponse.json({
+      word,
+      translation: cedictEntry.zh,
+      pinyin: cedictEntry.pinyin || null,
+      source: "cedict",
+    });
   }
 
   return NextResponse.json({
