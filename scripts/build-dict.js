@@ -7,11 +7,15 @@
  * Output: public/dict/en-zh.json — a JSON object { "word": { zh, def, pinyin } }
  *
  * Scoring strategy (higher = better):
- *   - Exact match: definition is exactly the target word (+100)
+ *   - Exact match bonus reduced (+40) to avoid archaic single-char dominance
  *   - Definition starts with the word (+30)
- *   - Single-word definition matching target (+50)
- *   - 2-character Chinese preferred (+20) — most natural in modern Chinese
- *   - 1-character Chinese penalized (-15) — often literary/archaic
+ *   - Single-word definition matching target (+25)
+ *   - 2-character Chinese strongly preferred (+30) — most natural in modern Chinese
+ *   - 3-character Chinese preferred (+20)
+ *   - 4-character Chinese (chengyu/compounds) (+10)
+ *   - 1-character Chinese heavily penalized (-80) — often literary/archaic
+ *   - Archaic/variant/surname entries filtered out entirely
+ *   - Non-CJK translations filtered out
  *   - Shorter definitions preferred (less ambiguity)
  */
 
@@ -61,6 +65,43 @@ const stopWords = new Set([
   'lit', 'fig', 'variant', 'old', 'also', 'same',
 ]);
 
+// Patterns that indicate archaic, variant, surname, or low-quality entries
+const skipPatterns = [
+  /\barchaic\b/i,
+  /\bold variant\b/i,
+  /\bvariant of\b/i,
+  /\bsee [A-Z\u4e00-\u9fff]/,  // "see X" cross-references
+  /\bsurname\b/i,
+  /\babbr\.\s*(for|of)\b/i,
+  /\bused in\b/i,
+  /\bplace name\b/i,
+  /\bcounty in\b/i,
+  /\bprovince\b/i,
+  /\bdistrict in\b/i,
+  /\btownship in\b/i,
+  /\bcity in\b/i,
+  /\bhistorical\b/i,
+  /\bobsolete\b/i,
+  /\bdialect\b/i,
+  /\bliterary\b/i,
+  /\bclassical\b/i,
+];
+
+/**
+ * Check if a Chinese string contains only valid CJK characters.
+ * Filters out entries that are Latin letters, digits, or symbols.
+ */
+function isValidChinese(zh) {
+  return /^[\u4e00-\u9fff\u3400-\u4dbf]+$/.test(zh);
+}
+
+/**
+ * Check if a definition indicates an archaic, variant, or low-quality entry.
+ */
+function shouldSkipDef(def) {
+  return skipPatterns.some(p => p.test(def));
+}
+
 /**
  * Score a candidate translation for a given English word.
  * Higher score = better translation.
@@ -70,30 +111,37 @@ function scoreCandidate(word, entry, def) {
   const cleanDef = def.toLowerCase().replace(/\([^)]*\)/g, '').trim();
   const zhLen = entry.simplified.length;
 
-  // Exact match: the entire definition is exactly the word
+  // Exact match: the entire definition is exactly the word (reduced from 100)
   if (cleanDef === word) {
-    score += 100;
+    score += 40;
   }
   // Single-word definition that matches
   else if (cleanDef.split(/\s+/).length === 1 && cleanDef === word) {
-    score += 50;
+    score += 25;
   }
   // Definition starts with the word (e.g., "run" matches "run; to jog")
   else if (cleanDef.startsWith(word + ' ') || cleanDef.startsWith(word + ';') || cleanDef.startsWith(word + ',')) {
     score += 30;
   }
+  // "to <word>" pattern — very common in CEDICT (e.g., "to control")
+  else if (cleanDef === 'to ' + word || cleanDef.startsWith('to ' + word + ' ') || cleanDef.startsWith('to ' + word + ';')) {
+    score += 28;
+  }
 
-  // Prefer 2-character Chinese words (most natural in modern Chinese)
+  // Strongly prefer 2-character Chinese words (most natural in modern Chinese)
   if (zhLen === 2) {
-    score += 20;
+    score += 30;
   } else if (zhLen === 1) {
-    // Single characters are often literary/classical — penalize slightly
-    score -= 15;
+    // Single characters are very often literary/classical — heavy penalty
+    score -= 80;
   } else if (zhLen === 3) {
-    score += 10;
+    score += 20;
   } else if (zhLen === 4) {
-    // 4-char can be chengyu (idioms) — still useful but less common in speech
-    score += 5;
+    // 4-char can be chengyu (idioms) — still useful
+    score += 10;
+  } else if (zhLen >= 5) {
+    // Long compounds are usually too specific
+    score -= 5;
   }
 
   // Prefer shorter definitions (less ambiguous, more direct translations)
@@ -103,9 +151,15 @@ function scoreCandidate(word, entry, def) {
 }
 
 for (const entry of entries) {
+  // Skip entries that aren't valid Chinese characters (filters %, A, B, 3P, etc.)
+  if (!isValidChinese(entry.simplified)) continue;
+
   for (const def of entry.defs) {
     // Skip classifier/measure word entries and very long definitions
     if (def.startsWith('CL:') || def.length > 100) continue;
+
+    // Skip archaic, variant, surname, geographic, and low-quality entries
+    if (shouldSkipDef(def)) continue;
 
     // Extract English words from the definition
     const words = def
